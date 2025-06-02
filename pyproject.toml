@@ -1,0 +1,21 @@
+[project]
+name = "mazeuploader"
+version = "0.1.0"
+description = "Add your description here"
+requires-python = ">=3.13"
+dependencies = [
+    "emoji>=2.14.1",
+    "google-api-python-client>=2.170.0",
+    "google-auth-httplib2>=0.2.0",
+    "google-auth-oauthlib>=1.2.2",
+    "google-genai>=1.18.0",
+    "moviepy==2.2.1",
+    "openai>=1.82.1",
+    "pymongo>=4.13.0",
+    "tqdm>=4.67.1",
+]
+
+[dependency-groups]
+dev = [
+    "ruff>=0.11.12",
+]
