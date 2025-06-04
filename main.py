@@ -1,4 +1,5 @@
-# from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor, as_completed
+import multiprocessing
 from tqdm import tqdm
 from video_uploader.uploader import YouTubeUploader
 from maze_generator import Maze
@@ -7,6 +8,22 @@ from video_editor.editor import VideoEditor
 from content_ai.generator import generate
 import random
 from content_ai.generator import VideoContent
+import json
+from collections import Counter
+
+done_file = "done.txt"
+
+def mark_done(channel_id: str, lock):
+    with lock:
+        with open(done_file, "a") as f:
+            f.write(f"{channel_id}\n")
+
+
+def load_done_counts():
+    if os.path.exists(done_file):
+        with open(done_file) as f:
+            return Counter(line.strip() for line in f)
+    return Counter()
 
 
 def get_maze(level: str, color_scheme=None):
@@ -166,7 +183,7 @@ def get_timer_text(
                 maze_timer_text = "Next level in:"
                 solution_timer_text = ""
             if current_level == total_levels:
-                maze_timer_text = "Thank you for watching!"
+                maze_timer_text = "Thank you for watching!\nTime left:"
                 solution_timer_text = ""
 
     return maze_timer_text, solution_timer_text
@@ -180,6 +197,7 @@ def main(
     creds=None,
     color_scheme=None,
     font_scheme=None,
+    upload=True,
 ):
     levels = levels or ["B", "M", "H"]  # Default levels if not provided
     total_duration = total_duration or 60  # Default total duration in seconds
@@ -255,39 +273,41 @@ def main(
     )
     video_editor.create_video(preview=False)
 
-    try:
-        meta = generate(levels, total_duration, "openai")
-    except Exception:
-        try:
-            meta = generate(levels, total_duration, "google")
-        except Exception:
-            meta = VideoContent(
-                title="Maze Challenge",
-                description="Can you solve this maze? Watch the video and try to beat the time!",
-                tags=["maze", "puzzle", "shorts", "brain game", "can you solve"],
-            )
+    if upload:
 
-    # Upload the video to YouTube
-    uploader = YouTubeUploader(creds)
-    response = uploader.upload_video(
-        random_path,
-        title=meta.title,
-        description=meta.description,
-        category_id=20,
-        privacy_status="public",
-        made_for_kids=False,
-        tags=meta.tags
-        or [
-            "maze",
-            "puzzle",
-            "shorts",
-            "brain game",
-            "can you solve",
-            "short puzzle video",
-            "quick challenge",
-        ],
-    )
-    print(f"Video uploaded successfully: https://youtube.com/shorts/{response['id']}")
+        try:
+            meta = generate(levels, total_duration, "openai")
+        except Exception:
+            try:
+                meta = generate(levels, total_duration, "google")
+            except Exception:
+                meta = VideoContent(
+                    title="Maze Challenge",
+                    description="Can you solve this maze? Watch the video and try to beat the time!",
+                    tags=["maze", "puzzle", "shorts", "brain game", "can you solve"],
+                )
+
+        # Upload the video to YouTube
+        uploader = YouTubeUploader(creds)
+        response = uploader.upload_video(
+            random_path,
+            title=meta.title,
+            description=meta.description,
+            category_id=20,
+            privacy_status="public",
+            made_for_kids=False,
+            tags=meta.tags
+            or [
+                "maze",
+                "puzzle",
+                "shorts",
+                "brain game",
+                "can you solve",
+                "short puzzle video",
+                "quick challenge",
+            ],
+        )
+        print(f"Video uploaded successfully: https://youtube.com/shorts/{response['id']}")
     os.remove(random_path)
 
 
@@ -300,16 +320,62 @@ if __name__ == "__main__":
 
     test_mode = os.environ.get("TEST_MODE", "false").lower() == "true"
 
-    multiplier = 1 if test_mode else 2
+    upload = os.environ.get("UPLOAD", "true").lower() == "true"
+
+    multiplier = os.getenv("MULTIPLIER")
+
+    workers = os.getenv("WORKERS")
+
+    runtime = os.getenv("RUNTIME", "local").lower()
+
+    if workers:
+        try:
+            workers = int(workers)
+        except ValueError:
+            print(f"Invalid WORKERS value: {workers}. Defaulting to 4.")
+            workers = None
+
+    if workers is None:
+        workers = max(1, os.cpu_count())
+
+    if multiplier:
+        try:
+            multiplier = int(multiplier)
+        except ValueError:
+            print(f"Invalid MULTIPLIER value: {multiplier}. Defaulting to 1.")
+            multiplier = None
+
+    if multiplier is None:
+        multiplier = 1 if test_mode else 2
 
     print(f"Running in test mode: {test_mode}")
 
-    channels = db.get_all_channels(test=test_mode)
+    clannels = os.getenv("CHANNELS")
 
-    print(channels)
+    if clannels:
+        try:
+            channels = json.loads(clannels)
+        except json.JSONDecodeError:
+            print(f"Invalid CHANNELS JSON: {clannels}. Fetching from database instead.")
+            channels = None
 
-    def create_video_instance(channel):
-        channel_id = channel["channel_id"]
+    if not clannels:
+        print("Fetching channels from database...")
+        channels = db.get_all_channels(test=test_mode)
+
+    channels = [channel["channel_id"] for channel in channels * multiplier]
+
+    required_counts = Counter(channels)
+    completed_counts = load_done_counts()
+
+    # Determine how many times each is still pending
+    remaining = []
+    for ch in required_counts:
+        remaining_count = required_counts[ch] - completed_counts[ch]
+        remaining.extend([ch] * remaining_count)
+
+    def create_video_instance(channel_id, lock):
+        global db, upload
         (
             creds,
             font_scheme,
@@ -331,24 +397,29 @@ if __name__ == "__main__":
                 creds=creds,
                 color_scheme=color_scheme,
                 font_scheme=font_scheme,
+                upload=upload,
             )
+            mark_done(channel_id, lock)
         except Exception as e:
             print(f"❌ Error creating video for channel {channel_id}: {e}")
         print(f"✅ Video created successfully for channel {channel_id}")
 
-    # with ThreadPoolExecutor(max_workers=4) as executor:
-    #     futures = [
-    #         executor.submit(create_video_instance, channel) for channel in channels * multiplier
-    #     ]
-    #     for future in tqdm(
-    #         as_completed(futures), total=len(futures), desc="Processing videos"
-    #     ):
-    #         try:
-    #             future.result()
-    #         except Exception as e:
-    #             print(f"Error in thread: {e}")
+    manager = multiprocessing.Manager()
+    lock = manager.Lock()
 
-    for channel in tqdm(
-        channels * multiplier, desc="Processing videos", unit="channel"
-    ):
-        create_video_instance(channel)
+    with ThreadPoolExecutor(max_workers=workers) as executor:
+        futures = [
+            executor.submit(create_video_instance, channel, lock) for channel in remaining
+        ]
+        for future in tqdm(
+            as_completed(futures), total=len(futures), desc="Processing videos"
+        ):
+            try:
+                future.result()
+            except Exception as e:
+                print(f"Error in thread: {e}")
+
+    if runtime == "gcp":
+        from runtime import delete_instance
+        print("Deleting instance...")
+        delete_instance()
