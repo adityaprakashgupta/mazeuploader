@@ -350,6 +350,7 @@ dependencies = [
 
 [package.dev-dependencies]
 dev = [
+    { name = "python-dotenv" },
     { name = "ruff" },
 ]
 
@@ -367,7 +368,10 @@ requires-dist = [
 ]
 
 [package.metadata.requires-dev]
-dev = [{ name = "ruff", specifier = ">=0.11.12" }]
+dev = [
+    { name = "python-dotenv", specifier = ">=1.1.0" },
+    { name = "ruff", specifier = ">=0.11.12" },
+]
 
 [[package]]
 name = "moviepy"

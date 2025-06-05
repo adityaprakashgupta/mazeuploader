@@ -315,6 +315,12 @@ if __name__ == "__main__":
     from database.client import YouTubeDB
     import os
 
+    runtime = os.getenv("RUNTIME", "local").lower()
+    if runtime == "local":
+        print("Running in local mode. Loading environment variables from .env file.")
+        from dotenv import load_dotenv
+        load_dotenv(".env")
+
     mongo_uri = os.getenv("MONGO_URI")
     db = YouTubeDB(mongo_uri)
 
@@ -325,8 +331,6 @@ if __name__ == "__main__":
     multiplier = os.getenv("MULTIPLIER")
 
     workers = os.getenv("WORKERS")
-
-    runtime = os.getenv("RUNTIME", "local").lower()
 
     if workers:
         try:

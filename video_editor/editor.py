@@ -145,7 +145,7 @@ class VideoEditor:
             video_clip.show(9)
             video_clip.show(59)
         else:
-            video_clip.write_videofile(self.output_path, fps=24)
+            video_clip.write_videofile(self.output_path, fps=1)
 
     def generate_timer_clips(
         self, duration, text="", display_timer=True, text_color="white"
