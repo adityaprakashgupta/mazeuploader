@@ -1,4 +1,4 @@
-from moviepy import *
+from moviepy import TextClip, ImageClip, AudioFileClip, CompositeVideoClip, concatenate_videoclips, afx
 import numpy as np
 from PIL import Image, ImageFont, ImageDraw
 import emoji

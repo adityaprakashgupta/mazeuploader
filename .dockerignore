@@ -48,3 +48,4 @@ docker-compose.yml
 README.md
 done.txt
 gcp/
+.ruff_cache/
