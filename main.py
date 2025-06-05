@@ -290,7 +290,7 @@ def main(
         # Upload the video to YouTube
         uploader = YouTubeUploader(creds)
         response = uploader.upload_video(
-            random_path,
+            random_path.replace(".mp4", "_60fps.mp4"),
             title=meta.title,
             description=meta.description,
             category_id=20,
@@ -309,6 +309,7 @@ def main(
         )
         print(f"Video uploaded successfully: https://youtube.com/shorts/{response['id']}")
     os.remove(random_path)
+    os.remove(random_path.replace(".mp4", "_60fps.mp4"))
 
 
 if __name__ == "__main__":

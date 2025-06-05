@@ -2,6 +2,7 @@ from moviepy import *
 import numpy as np
 from PIL import Image, ImageFont, ImageDraw
 import emoji
+import subprocess
 
 video_width = 1080
 video_height = 1920
@@ -146,6 +147,26 @@ class VideoEditor:
             video_clip.show(59)
         else:
             video_clip.write_videofile(self.output_path, fps=1)
+            # Run ffmpeg to increase the frame rate to 60fps
+            subprocess.run(
+                [
+                    "ffmpeg",
+                    "-i",
+                    self.output_path,
+                    "-r",
+                    "60",
+                    "-c:v",
+                    "libx264",  # Video codec
+                    "-preset",
+                    "veryfast",
+                    "-crf",
+                    "23",
+                    "-c:a",
+                    "copy",
+                    self.output_path.replace(".mp4", "_60fps.mp4"),
+                ],
+                check=True,
+            )
 
     def generate_timer_clips(
         self, duration, text="", display_timer=True, text_color="white"
