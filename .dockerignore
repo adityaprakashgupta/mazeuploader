@@ -46,3 +46,5 @@ output/
 Dockerfile
 docker-compose.yml
 README.md
+done.txt
+gcp/
